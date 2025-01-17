@@ -29,11 +29,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Add status updates
-    const encoder = new TextEncoder();
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
-
     // Convert video to buffer
     const buffer = Buffer.from(await videoFile.arrayBuffer());
 
