@@ -14,6 +14,7 @@ export default function VideoUploader({ onUploadComplete }: VideoUploaderProps) 
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string>('');
   const [recordedVideo, setRecordedVideo] = useState<File | null>(null);
+  const [progress, setProgress] = useState<string>('');
 
   const handleVideoReady = (videoFile: File) => {
     setRecordedVideo(videoFile);
@@ -25,6 +26,7 @@ export default function VideoUploader({ onUploadComplete }: VideoUploaderProps) 
 
     setUploading(true);
     setError('');
+    setProgress('Uploading video...');
 
     try {
       const formData = new FormData();
@@ -36,14 +38,20 @@ export default function VideoUploader({ onUploadComplete }: VideoUploaderProps) 
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
       }
 
       const data = await response.json() as UploadResponse;
+      if (!data.transcription) {
+        throw new Error('No transcription received');
+      }
+      
       onUploadComplete(data);
+      setProgress('');
     } catch (error) {
-      setError('Failed to upload video. Please try again.');
       console.error('Upload error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to upload video. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -57,6 +65,10 @@ export default function VideoUploader({ onUploadComplete }: VideoUploaderProps) 
         <p className="text-red-500 text-sm">{error}</p>
       )}
 
+      {progress && (
+        <p className="text-blue-500 text-sm">{progress}</p>
+      )}
+
       {recordedVideo && (
         <button
           onClick={handleUpload}
@@ -64,7 +76,7 @@ export default function VideoUploader({ onUploadComplete }: VideoUploaderProps) 
           className="w-full flex items-center justify-center space-x-2 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           <Upload className="w-5 h-5" />
-          <span>{uploading ? 'Processing...' : 'Upload & Transcribe'}</span>
+          <span>{uploading ? 'Processing (this may take a minute)...' : 'Upload & Transcribe'}</span>
         </button>
       )}
     </div>
