@@ -31,7 +31,7 @@ export default function Home() {
 
           {videoUrl && (
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-lg font-semibold mb-4">Uploadedd Video</h2>
+              <h2 className="text-lg font-semibold mb-4">Uploaded Video</h2>
               <video
                 className="w-full rounded-lg"
                 controls
