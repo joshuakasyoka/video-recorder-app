@@ -1,13 +1,13 @@
-// src/app/api/upload/route.ts
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import clientPromise from '@/lib/mongodb';
 import { uploadToCloudinary } from '@/lib/cloudinary';
-import { VideoDocument, CloudinaryUploadResult } from '@/types';
+import { CloudinaryUploadResult } from '@/types';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
 
 export async function POST(request: Request) {
   try {
@@ -25,10 +25,12 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await videoFile.arrayBuffer());
 
     try {
+      // Upload to Cloudinary
       console.log('Uploading to Cloudinary...');
       const cloudinaryResult = await uploadToCloudinary({ buffer }) as CloudinaryUploadResult;
       console.log('Cloudinary upload successful');
 
+      // Get transcription
       console.log('Getting transcription...');
       const transcription = await openai.audio.transcriptions.create({
         file: videoFile,
@@ -42,6 +44,7 @@ export async function POST(request: Request) {
       }
       console.log('Transcription successful');
 
+      // Generate tags
       console.log('Generating tags...');
       const tagsResponse = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -64,50 +67,77 @@ export async function POST(request: Request) {
       const tags = tagContent.split(',').map(tag => tag.trim());
       console.log('Tags generated successfully');
 
+      // Save to MongoDB
       console.log('Saving to MongoDB...');
-      const mongoClient = await clientPromise;
-      const db = mongoClient.db('video-transcriptions');
-      
-      const videoDoc: Omit<VideoDocument, '_id'> = {
-        videoUrl: cloudinaryResult.secure_url,
-        transcription: transcription,
-        tags,
-        createdAt: new Date(),
-      };
-
-      const result = await db.collection('videos').insertOne(videoDoc);
-      console.log('MongoDB save successful');
-
-      // Return success response with proper JSON structure
-      return NextResponse.json({
-        success: true,
-        message: 'Upload successful',
-        data: {
-          transcription,
-          tags,
+      try {
+        const mongoClient = await clientPromise;
+        const db = mongoClient.db('video-transcriptions');
+        
+        const videoDoc = {
           videoUrl: cloudinaryResult.secure_url,
-          _id: result.insertedId
-        }
-      });
+          transcription: transcription,
+          tags,
+          createdAt: new Date(),
+        };
 
-    } catch (error) {
-      console.error('Processing error:', error);
-      // Ensure error response is properly formatted
-      return NextResponse.json({
+        const result = await db.collection('videos').insertOne(videoDoc);
+        console.log('MongoDB save successful');
+
+        // Create response data
+        const responseData = {
+          success: true,
+          message: 'Upload successful',
+          data: {
+            transcription,
+            tags,
+            videoUrl: cloudinaryResult.secure_url,
+            _id: result.insertedId.toString()
+          }
+        };
+
+        // Return the response
+        return new NextResponse(JSON.stringify(responseData), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+      } catch (dbError) {
+        console.error('MongoDB error:', dbError);
+        return new NextResponse(JSON.stringify({
+          success: false,
+          error: 'Database operation failed'
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+
+    } catch (processingError) {
+      console.error('Processing error:', processingError);
+      return new NextResponse(JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Processing failed'
-      }, { 
-        status: 500 
+        error: processingError instanceof Error ? processingError.message : 'Processing failed'
+      }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
     }
-  } catch (error) {
-    console.error('Upload error:', error);
-    // Ensure error response is properly formatted
-    return NextResponse.json({
+  } catch (uploadError) {
+    console.error('Upload error:', uploadError);
+    return new NextResponse(JSON.stringify({
       success: false,
-      error: error instanceof Error ? error.message : 'Upload failed'
-    }, { 
-      status: 500 
+      error: uploadError instanceof Error ? uploadError.message : 'Upload failed'
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
   }
 }
