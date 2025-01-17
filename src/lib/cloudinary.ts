@@ -10,17 +10,31 @@ cloudinary.config({
 export const uploadToCloudinary = async ({ buffer }: { buffer: Buffer }) => {
   try {
     return new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
+      const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type: 'video',
           folder: 'video-transcriptions',
           allowed_formats: ['webm', 'mp4', 'mov'],
+          chunk_size: 6000000, // 6MB chunks
+          timeout: 120000, // 2 minute timeout
         },
         (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
         }
-      ).end(buffer);
+      );
+
+      // Handle stream errors
+      uploadStream.on('error', (error) => {
+        console.error('Upload stream error:', error);
+        reject(error);
+      });
+
+      uploadStream.end(buffer);
     });
   } catch (error) {
     console.error('Cloudinary upload error:', error);
