@@ -6,16 +6,25 @@
         "maxDuration": 300
       }
     },
-    "routes": [
+    "regions": ["iad1"],
+    "cleanUrls": true,
+    "headers": [
       {
-        "source": "/api/upload",
-        "destination": "/api/upload",
-        "methods": ["POST", "OPTIONS"],
-        "headers": {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type"
-        }
+        "source": "/api/(.*)",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Access-Control-Allow-Methods",
+            "value": "GET, POST, PUT, DELETE, OPTIONS"
+          },
+          {
+            "key": "Access-Control-Allow-Headers",
+            "value": "Content-Type"
+          }
+        ]
       }
     ]
   }
