@@ -38,7 +38,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         setPermissionDenied(true);
         throw new Error('Camera permission denied');
       }
-    } catch (error) {
+    } catch (err) {
       // Some browsers (like Safari) don't support permission query
       console.log('Permission query not supported, will try direct access');
     }
@@ -49,7 +49,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
     try {
       const constraints = {
         video: {
-          width: { ideal: isIOS ? 1280 : 1920 }, // Lower resolution for iOS
+          width: { ideal: isIOS ? 1280 : 1920 },
           height: { ideal: isIOS ? 720 : 1080 },
           frameRate: { ideal: 30 },
           facingMode: 'user',
@@ -61,18 +61,17 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        // iOS Safari specific setup
         videoRef.current.setAttribute('playsinline', 'true');
         videoRef.current.setAttribute('webkit-playsinline', 'true');
       }
 
       return mediaStream;
-    } catch (error) {
-      console.error('Camera access error:', error);
-      if ((error as Error).name === 'NotAllowedError') {
+    } catch (err) {
+      console.error('Camera access error:', err);
+      if ((err as Error).name === 'NotAllowedError') {
         setPermissionDenied(true);
       }
-      throw error;
+      throw err;
     }
   };
 
@@ -82,10 +81,9 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       const mediaStream = await initializeCamera();
       setStream(mediaStream);
 
-      // Configure MediaRecorder
       const mediaRecorder = new MediaRecorder(mediaStream, {
         mimeType: getSupportedMimeType(),
-        videoBitsPerSecond: isIOS ? 1500000 : 2500000, // Lower bitrate for iOS
+        videoBitsPerSecond: isIOS ? 1500000 : 2500000,
       });
 
       mediaRecorder.ondataavailable = (event) => {
@@ -104,15 +102,15 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (error) {
-      console.error('Recording setup error:', error);
+    } catch (err) {
+      console.error('Recording setup error:', err);
       if (permissionDenied) {
         alert('Camera access was denied. Please enable camera access in your device settings and refresh the page.');
       } else {
         alert('Failed to access camera. Please ensure you have granted camera permissions and are using a supported browser.');
       }
     }
-  }, [onVideoReady, permissionDenied]);
+  }, [onVideoReady, permissionDenied, isIOS]); // Added isIOS to dependencies
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -130,7 +128,6 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
     }
   }, [isRecording, stream]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (stream) {
