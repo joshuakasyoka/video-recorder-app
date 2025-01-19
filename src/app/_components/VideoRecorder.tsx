@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { Camera, StopCircle } from 'lucide-react';
 
 interface VideoRecorderProps {
@@ -10,33 +10,82 @@ interface VideoRecorderProps {
 export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  const startRecording = useCallback(async () => {
+  // Check if device is iOS
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // Function to get supported mime type
+  const getSupportedMimeType = () => {
+    const types = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4',
+    ];
+    return types.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+  };
+
+  // Function to check and request permissions
+  const checkPermissions = async () => {
     try {
-      // Request high-quality video stream
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
+      const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      if (result.state === 'denied') {
+        setPermissionDenied(true);
+        throw new Error('Camera permission denied');
+      }
+    } catch (error) {
+      // Some browsers (like Safari) don't support permission query
+      console.log('Permission query not supported, will try direct access');
+    }
+  };
+
+  // Initialize camera with proper constraints
+  const initializeCamera = async () => {
+    try {
+      const constraints = {
         video: {
-          width: { ideal: 1920 }, // Full HD width
-          height: { ideal: 1080 }, // Full HD height
-          frameRate: { ideal: 30 }, // 30 FPS
-          facingMode: 'user', // Use front camera
+          width: { ideal: isIOS ? 1280 : 1920 }, // Lower resolution for iOS
+          height: { ideal: isIOS ? 720 : 1080 },
+          frameRate: { ideal: 30 },
+          facingMode: 'user',
         },
         audio: true
-      });
+      };
 
-      setStream(mediaStream);
-
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        // iOS Safari specific setup
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.setAttribute('webkit-playsinline', 'true');
       }
 
-      // Configure MediaRecorder with high-quality settings
+      return mediaStream;
+    } catch (error) {
+      console.error('Camera access error:', error);
+      if ((error as Error).name === 'NotAllowedError') {
+        setPermissionDenied(true);
+      }
+      throw error;
+    }
+  };
+
+  const startRecording = useCallback(async () => {
+    try {
+      await checkPermissions();
+      const mediaStream = await initializeCamera();
+      setStream(mediaStream);
+
+      // Configure MediaRecorder
       const mediaRecorder = new MediaRecorder(mediaStream, {
-        mimeType: 'video/webm;codecs=vp9,opus', // Use VP9 codec for better quality
-        videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality
+        mimeType: getSupportedMimeType(),
+        videoBitsPerSecond: isIOS ? 1500000 : 2500000, // Lower bitrate for iOS
       });
 
       mediaRecorder.ondataavailable = (event) => {
@@ -46,8 +95,8 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        const file = new File([blob], 'recorded-video.webm', { type: 'video/webm' });
+        const blob = new Blob(chunksRef.current, { type: getSupportedMimeType() });
+        const file = new File([blob], 'recorded-video.webm', { type: getSupportedMimeType() });
         onVideoReady(file);
         chunksRef.current = [];
       };
@@ -56,10 +105,14 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error) {
-      console.error('Error accessing camera:', error);
-      alert('Failed to access camera. Please ensure you have granted camera permissions.');
+      console.error('Recording setup error:', error);
+      if (permissionDenied) {
+        alert('Camera access was denied. Please enable camera access in your device settings and refresh the page.');
+      } else {
+        alert('Failed to access camera. Please ensure you have granted camera permissions and are using a supported browser.');
+      }
     }
-  }, [onVideoReady]);
+  }, [onVideoReady, permissionDenied]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -76,6 +129,15 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       videoRef.current.srcObject = null;
     }
   }, [isRecording, stream]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
 
   return (
     <div className="space-y-4">
@@ -106,6 +168,12 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
           </button>
         )}
       </div>
+
+      {permissionDenied && (
+        <p className="text-red-500 text-sm text-center mt-2">
+          Camera access was denied. Please enable camera access in your device settings and refresh the page.
+        </p>
+      )}
     </div>
   );
 }
