@@ -30,7 +30,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         return 'video/webm';
       }
       return defaultType;
-    } catch (e) {
+    } catch {
       return defaultType;
     }
   };
