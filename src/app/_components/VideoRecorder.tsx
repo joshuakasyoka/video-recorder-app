@@ -21,49 +21,23 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
 
   // Function to get supported mime type
   const getSupportedMimeType = () => {
-    if (isIOS) {
-      const iosTypes = [
-        'video/mp4;codecs=avc1,mp4a.40.2', // Explicitly include audio codec
-        'video/mp4',
-        'video/quicktime',
-      ];
-      return iosTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/mp4';
-    }
-
-    const types = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-      'video/mp4',
-    ];
-    return types.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
-  };
-
-  // Function to check both camera and microphone permissions
-  const checkPermissions = async () => {
+    const defaultType = 'video/mp4';
+    
     try {
-      // Check camera permission
-      const cameraResult = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      // Check microphone permission
-      const microphoneResult = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-
-      if (cameraResult.state === 'denied' || microphoneResult.state === 'denied') {
-        setPermissionDenied(true);
-        throw new Error('Camera or microphone permission denied');
+      if (MediaRecorder.isTypeSupported('video/mp4')) {
+        return 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        return 'video/webm';
       }
+      return defaultType;
     } catch {
-      // Some browsers (like Safari) don't support permission query
-      console.log('Permission query not supported, will try direct access');
+      return defaultType;
     }
   };
 
-  // Initialize camera and microphone
+  // Initialize media devices
   const initializeMedia = useCallback(async () => {
     try {
-      // First request audio only to ensure microphone permission
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Then request both video and audio with constraints
       const constraints = {
         video: {
           width: { ideal: isIOS ? 1280 : 1920 },
@@ -71,28 +45,14 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
           frameRate: { ideal: 30 },
           facingMode: 'user',
         },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100,
-          channelCount: 2
-        }
+        audio: true
       };
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Verify that we have both audio and video tracks
-      const hasAudio = mediaStream.getAudioTracks().length > 0;
-      const hasVideo = mediaStream.getVideoTracks().length > 0;
-      
-      if (!hasAudio || !hasVideo) {
-        throw new Error('Failed to get both audio and video streams');
-      }
-
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.setAttribute('playsinline', 'true');
-        videoRef.current.setAttribute('webkit-playsinline', 'true');
       }
 
       return mediaStream;
@@ -107,18 +67,16 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
 
   const startRecording = useCallback(async () => {
     try {
-      await checkPermissions();
       const mediaStream = await initializeMedia();
       setStream(mediaStream);
 
-      const mimeType = getSupportedMimeType();
-      console.log('Using MIME type:', mimeType); // Debug log
+      const options: MediaRecorderOptions = {
+        mimeType: getSupportedMimeType()
+      };
 
-      const mediaRecorder = new MediaRecorder(mediaStream, {
-        mimeType,
-        videoBitsPerSecond: isIOS ? 1500000 : 2500000,
-        audioBitsPerSecond: 128000 // Specify audio bitrate
-      });
+      console.log('Using MIME type:', options.mimeType); // Debug log
+
+      const mediaRecorder = new MediaRecorder(mediaStream, options);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -135,7 +93,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         chunksRef.current = [];
       };
 
-      // For iOS, we want more frequent data chunks
+      // For iOS, use smaller chunks
       const timeSlice = isIOS ? 1000 : undefined;
 
       mediaRecorderRef.current = mediaRecorder;
