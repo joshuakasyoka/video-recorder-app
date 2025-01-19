@@ -1,4 +1,3 @@
-// src/app/_components/VideoUploader.tsx
 'use client';
 
 import { useState } from 'react';
@@ -37,21 +36,22 @@ export default function VideoUploader({ onUploadComplete }: VideoUploaderProps) 
         body: formData,
       });
 
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        throw new Error(responseData.error || 'Upload failed');
       }
 
-      const data = await response.json() as UploadResponse;
-      if (!data.transcription) {
-        throw new Error('No transcription received');
+      if (!responseData.data?.transcription) {
+        throw new Error('No transcription received in the response');
       }
       
-      onUploadComplete(data);
+      onUploadComplete(responseData.data);
       setProgress('');
     } catch (error) {
       console.error('Upload error:', error);
       setError(error instanceof Error ? error.message : 'Failed to upload video. Please try again.');
+      setProgress('');
     } finally {
       setUploading(false);
     }
