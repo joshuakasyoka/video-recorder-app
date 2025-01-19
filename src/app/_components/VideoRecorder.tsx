@@ -38,14 +38,14 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         setPermissionDenied(true);
         throw new Error('Camera permission denied');
       }
-    } catch (err) {
+    } catch {
       // Some browsers (like Safari) don't support permission query
       console.log('Permission query not supported, will try direct access');
     }
   };
 
   // Initialize camera with proper constraints
-  const initializeCamera = async () => {
+  const initializeCamera = useCallback(async () => {
     try {
       const constraints = {
         video: {
@@ -73,7 +73,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       }
       throw err;
     }
-  };
+  }, [isIOS]); // Added isIOS as dependency
 
   const startRecording = useCallback(async () => {
     try {
@@ -110,7 +110,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         alert('Failed to access camera. Please ensure you have granted camera permissions and are using a supported browser.');
       }
     }
-  }, [onVideoReady, permissionDenied, isIOS]); // Added isIOS to dependencies
+  }, [onVideoReady, permissionDenied, isIOS, initializeCamera]); // Added initializeCamera to dependencies
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
