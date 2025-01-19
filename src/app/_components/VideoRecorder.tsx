@@ -20,42 +20,58 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // Function to get supported mime type
-  const getSupportedMimeType = () => {
-    const defaultType = 'video/mp4';
-    
-    try {
-      if (MediaRecorder.isTypeSupported('video/mp4')) {
-        return 'video/mp4';
-      } else if (MediaRecorder.isTypeSupported('video/webm')) {
-        return 'video/webm';
-      }
-      return defaultType;
-    } catch {
-      return defaultType;
+  const getSupportedMimeType = useCallback(() => {
+    if (isIOS) {
+      return 'video/mp4';
     }
-  };
+    return 'video/webm';
+  }, [isIOS]);
 
-  // Initialize media devices
+  // Initialize media devices with separate audio setup for iOS
   const initializeMedia = useCallback(async () => {
     try {
-      const constraints = {
+      // First, explicitly request microphone access
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false
+      });
+      
+      // Then request video
+      const videoStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: isIOS ? 1280 : 1920 },
           height: { ideal: isIOS ? 720 : 1080 },
           frameRate: { ideal: 30 },
           facingMode: 'user',
         },
-        audio: true
-      };
+        audio: false
+      });
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Combine audio and video tracks
+      const combinedTracks = [
+        ...audioStream.getAudioTracks(),
+        ...videoStream.getVideoTracks()
+      ];
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        videoRef.current.setAttribute('playsinline', 'true');
+      const combinedStream = new MediaStream(combinedTracks);
+
+      // Verify we have both audio and video tracks
+      if (combinedStream.getAudioTracks().length === 0) {
+        throw new Error('No audio track available');
       }
 
-      return mediaStream;
+      if (combinedStream.getVideoTracks().length === 0) {
+        throw new Error('No video track available');
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = combinedStream;
+        videoRef.current.setAttribute('playsinline', 'true');
+        // Unmute to test audio
+        videoRef.current.muted = false;
+      }
+
+      return combinedStream;
     } catch (err) {
       console.error('Media access error:', err);
       if ((err as Error).name === 'NotAllowedError') {
@@ -71,10 +87,11 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       setStream(mediaStream);
 
       const options: MediaRecorderOptions = {
-        mimeType: getSupportedMimeType()
+        mimeType: getSupportedMimeType(),
+        audioBitsPerSecond: 128000
       };
 
-      console.log('Using MIME type:', options.mimeType); // Debug log
+      console.log('Using MIME type:', options.mimeType);
 
       const mediaRecorder = new MediaRecorder(mediaStream, options);
 
@@ -107,7 +124,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         alert('Failed to access camera or microphone. Please ensure you have granted both camera and microphone permissions and are using a supported browser.');
       }
     }
-  }, [onVideoReady, permissionDenied, isIOS, initializeMedia]);
+  }, [onVideoReady, permissionDenied, isIOS, initializeMedia, getSupportedMimeType]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -122,6 +139,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
 
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      videoRef.current.muted = true;
     }
   }, [isRecording, stream]);
 
