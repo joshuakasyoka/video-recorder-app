@@ -21,6 +21,16 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
 
   // Function to get supported mime type
   const getSupportedMimeType = () => {
+    if (isIOS) {
+      // For iOS, prioritize MP4
+      const iosTypes = [
+        'video/mp4',
+        'video/quicktime',
+        'video/webm',
+      ];
+      return iosTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/mp4';
+    }
+
     const types = [
       'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus',
@@ -73,7 +83,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       }
       throw err;
     }
-  }, [isIOS]); // Added isIOS as dependency
+  }, [isIOS]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -81,8 +91,11 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       const mediaStream = await initializeCamera();
       setStream(mediaStream);
 
+      const mimeType = getSupportedMimeType();
+      console.log('Using MIME type:', mimeType); // Debug log
+
       const mediaRecorder = new MediaRecorder(mediaStream, {
-        mimeType: getSupportedMimeType(),
+        mimeType,
         videoBitsPerSecond: isIOS ? 1500000 : 2500000,
       });
 
@@ -93,14 +106,19 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: getSupportedMimeType() });
-        const file = new File([blob], 'recorded-video.webm', { type: getSupportedMimeType() });
+        const mimeType = getSupportedMimeType();
+        const fileExtension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        const file = new File([blob], `recorded-video.${fileExtension}`, { type: mimeType });
         onVideoReady(file);
         chunksRef.current = [];
       };
 
+      // For iOS, we want more frequent data chunks
+      const timeSlice = isIOS ? 1000 : undefined; // 1 second chunks for iOS
+
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      mediaRecorder.start(timeSlice);
       setIsRecording(true);
     } catch (err) {
       console.error('Recording setup error:', err);
@@ -110,7 +128,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         alert('Failed to access camera. Please ensure you have granted camera permissions and are using a supported browser.');
       }
     }
-  }, [onVideoReady, permissionDenied, isIOS, initializeCamera]); // Added initializeCamera to dependencies
+  }, [onVideoReady, permissionDenied, isIOS, initializeCamera]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
