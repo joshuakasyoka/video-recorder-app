@@ -22,11 +22,10 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
   // Function to get supported mime type
   const getSupportedMimeType = () => {
     if (isIOS) {
-      // For iOS, prioritize MP4
       const iosTypes = [
+        'video/mp4;codecs=avc1,mp4a.40.2', // Explicitly include audio codec
         'video/mp4',
         'video/quicktime',
-        'video/webm',
       ];
       return iosTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/mp4';
     }
@@ -40,13 +39,17 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
     return types.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
   };
 
-  // Function to check and request permissions
+  // Function to check both camera and microphone permissions
   const checkPermissions = async () => {
     try {
-      const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      if (result.state === 'denied') {
+      // Check camera permission
+      const cameraResult = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      // Check microphone permission
+      const microphoneResult = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+
+      if (cameraResult.state === 'denied' || microphoneResult.state === 'denied') {
         setPermissionDenied(true);
-        throw new Error('Camera permission denied');
+        throw new Error('Camera or microphone permission denied');
       }
     } catch {
       // Some browsers (like Safari) don't support permission query
@@ -54,9 +57,13 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
     }
   };
 
-  // Initialize camera with proper constraints
-  const initializeCamera = useCallback(async () => {
+  // Initialize camera and microphone
+  const initializeMedia = useCallback(async () => {
     try {
+      // First request audio only to ensure microphone permission
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Then request both video and audio with constraints
       const constraints = {
         video: {
           width: { ideal: isIOS ? 1280 : 1920 },
@@ -64,11 +71,24 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
           frameRate: { ideal: 30 },
           facingMode: 'user',
         },
-        audio: true
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100,
+          channelCount: 2
+        }
       };
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       
+      // Verify that we have both audio and video tracks
+      const hasAudio = mediaStream.getAudioTracks().length > 0;
+      const hasVideo = mediaStream.getVideoTracks().length > 0;
+      
+      if (!hasAudio || !hasVideo) {
+        throw new Error('Failed to get both audio and video streams');
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.setAttribute('playsinline', 'true');
@@ -77,7 +97,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
 
       return mediaStream;
     } catch (err) {
-      console.error('Camera access error:', err);
+      console.error('Media access error:', err);
       if ((err as Error).name === 'NotAllowedError') {
         setPermissionDenied(true);
       }
@@ -88,7 +108,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
   const startRecording = useCallback(async () => {
     try {
       await checkPermissions();
-      const mediaStream = await initializeCamera();
+      const mediaStream = await initializeMedia();
       setStream(mediaStream);
 
       const mimeType = getSupportedMimeType();
@@ -97,6 +117,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       const mediaRecorder = new MediaRecorder(mediaStream, {
         mimeType,
         videoBitsPerSecond: isIOS ? 1500000 : 2500000,
+        audioBitsPerSecond: 128000 // Specify audio bitrate
       });
 
       mediaRecorder.ondataavailable = (event) => {
@@ -115,7 +136,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
       };
 
       // For iOS, we want more frequent data chunks
-      const timeSlice = isIOS ? 1000 : undefined; // 1 second chunks for iOS
+      const timeSlice = isIOS ? 1000 : undefined;
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(timeSlice);
@@ -123,12 +144,12 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
     } catch (err) {
       console.error('Recording setup error:', err);
       if (permissionDenied) {
-        alert('Camera access was denied. Please enable camera access in your device settings and refresh the page.');
+        alert('Camera or microphone access was denied. Please enable both camera and microphone access in your device settings and refresh the page.');
       } else {
-        alert('Failed to access camera. Please ensure you have granted camera permissions and are using a supported browser.');
+        alert('Failed to access camera or microphone. Please ensure you have granted both camera and microphone permissions and are using a supported browser.');
       }
     }
-  }, [onVideoReady, permissionDenied, isIOS, initializeCamera]);
+  }, [onVideoReady, permissionDenied, isIOS, initializeMedia]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -186,7 +207,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
 
       {permissionDenied && (
         <p className="text-red-500 text-sm text-center mt-2">
-          Camera access was denied. Please enable camera access in your device settings and refresh the page.
+          Camera or microphone access was denied. Please enable both camera and microphone access in your device settings and refresh the page.
         </p>
       )}
     </div>
