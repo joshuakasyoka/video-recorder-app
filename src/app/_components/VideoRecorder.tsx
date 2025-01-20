@@ -140,14 +140,14 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         autoPlay
         playsInline
         muted
-        className="w-full aspect-video bg-gray-900 rounded-lg"
+        className="w-full aspect-video bg-black"
       />
       
       <div className="flex justify-center">
         {!isRecording ? (
           <button
             onClick={startRecording}
-            className="flex items-center space-x-2 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600"
+            className="flex items-center space-x-2 border border-white text-white py-2 px-4 style={{ backgroundColor: '#BAFF39', transition: 'background-color 0.3s' }}"
           >
             <Camera className="w-5 h-5" />
             <span>Start Recording</span>
@@ -155,7 +155,7 @@ export default function VideoRecorder({ onVideoReady }: VideoRecorderProps) {
         ) : (
           <button
             onClick={stopRecording}
-            className="flex items-center space-x-2 bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600"
+            className="flex items-center space-x-2 border border-[#BAFF39] text-[#BAFF39] py-2 px-4" 
           >
             <StopCircle className="w-5 h-5" />
             <span>Stop Recording</span>

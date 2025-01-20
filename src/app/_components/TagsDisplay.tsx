@@ -5,12 +5,12 @@ interface TagsDisplayProps {
   export default function TagsDisplay({ tags }: TagsDisplayProps) {
     return (
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Tags</h2>
+        <h2 className="font-sm mb-4 text-white">Tags</h2>
         <div className="flex flex-wrap gap-2">
           {tags.map((tag, index) => (
             <span
               key={index}
-              className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
+              className="px-4 py-2 border border-white text-white"
             >
               {tag}
             </span>

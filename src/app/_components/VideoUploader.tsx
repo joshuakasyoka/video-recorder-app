@@ -73,7 +73,7 @@ export default function VideoUploader({ onUploadComplete }: VideoUploaderProps) 
         <button
           onClick={handleUpload}
           disabled={uploading}
-          className="w-full flex items-center justify-center space-x-2 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center space-x-2 border border-white text-white py-2 px-4"
         >
           <Upload className="w-5 h-5" />
           <span>{uploading ? 'Processing (this may take a minute)...' : 'Upload & Transcribe'}</span>
