@@ -5,7 +5,7 @@ interface TagsDisplayProps {
   export default function TagsDisplay({ tags }: TagsDisplayProps) {
     return (
       <div className="space-y-2">
-        <h2 className="font-sm mb-4 text-white">Tags</h2>
+        <h2 className="font-sm mb-4 text-white">TAGS</h2>
         <div className="flex flex-wrap gap-2">
           {tags.map((tag, index) => (
             <span
